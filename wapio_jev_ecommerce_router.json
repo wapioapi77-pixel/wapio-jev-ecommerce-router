@@ -1,0 +1,512 @@
+{
+  "name": "Wapio + Jev AI - E-Commerce Instant Order & Return Classifier",
+  "nodes": [
+    {
+      "parameters": {
+        "sessionId": {
+          "__rl": true,
+          "value": "YOUR_WAPIO_SESSION_ID",
+          "mode": "list",
+          "cachedResultName": "Select your connected WhatsApp session"
+        },
+        "events": [
+          "messages.received"
+        ]
+      },
+      "name": "Wapio Trigger",
+      "type": "n8n-nodes-wapio.wapioTrigger",
+      "typeVersion": 1,
+      "position": [
+        -560,
+        1456
+      ],
+      "id": "abb45da5-f2da-4488-a0f9-598e2e251066",
+      "credentials": {
+        "wapioApi": {
+          "id": "YOUR_WAPIO_CREDENTIAL_ID",
+          "name": "Wapio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "fromMe-check",
+              "leftValue": "={{ $json.data.messages.key.fromMe }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Filter Bot Outgoing (fromMe == false)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -320,
+        1456
+      ],
+      "id": "a76b3014-4b35-430c-ba6e-83817a655a23"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "manager-phone-id",
+              "name": "managerPhone",
+              "value": "15551234567",
+              "type": "string"
+            },
+            {
+              "id": "store-name-lower-id",
+              "name": "storeName",
+              "value": "TrendWear Boutique",
+              "type": "string"
+            },
+            {
+              "id": "store-name-cap-id",
+              "name": "StoreName",
+              "value": "TrendWear Boutique",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "⚙️ Store & Admin Settings",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -80,
+        1440
+      ],
+      "id": "e0509b42-7dd9-4672-a639-c84324056cd0"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.jev.ai/v1/classify",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_JEV_API_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"text\": \"{{ $json.data.messages.message.conversation || $json.data.messages.message.extendedTextMessage.text || $json.data.messages.messageBody || '' }}\",\n  \"categories\": [\"damaged_or_return\", \"size_exchange\", \"track_order\", \"general_inquiry\"],\n  \"extract\": {\n    \"has_order_id\": \"boolean\",\n    \"is_photo_received\": \"boolean\",\n    \"should_notify_manager\": \"boolean\",\n    \"churn_risk_score\": \"number\"\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        176,
+        1440
+      ],
+      "id": "a3c370e1-c83e-4bbf-baf4-8bc2abd55db9",
+      "name": "⚡ Jev AI Decision Engine (<300ms)"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "cond-track",
+                    "leftValue": "={{ $json.category }}",
+                    "rightValue": "track_order",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "cond-exchange",
+                    "leftValue": "={{ $json.category }}",
+                    "rightValue": "size_exchange",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "cond-damaged",
+                    "leftValue": "={{ $json.category }}",
+                    "rightValue": "damaged_or_return",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "name": "Router (Category Switch)",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        432,
+        1440
+      ],
+      "id": "1f167315-be73-4969-b204-0fd8bc25f792"
+    },
+    {
+      "parameters": {
+        "sessionId": {
+          "__rl": true,
+          "value": "YOUR_WAPIO_SESSION_ID",
+          "mode": "list",
+          "cachedResultName": "Select your connected WhatsApp session"
+        },
+        "to": "={{ $('Wapio Trigger').first().json.data.messages.key.remoteJid }}",
+        "text": "={{ (() => {\n  const trigger = $('Wapio Trigger').first().json;\n  const name = trigger?.data?.messages?.pushName || 'there';\n  const msgObj = trigger?.data?.messages?.message || {};\n  const rawText = (msgObj.conversation || msgObj.extendedTextMessage?.text || trigger?.data?.messages?.messageBody || '').trim();\n  const matchedId = rawText.match(/#?\\d{3,8}\\b/)?.[0] || rawText.match(/\\b\\d{3,8}\\b/)?.[0];\n\n  if (matchedId) {\n    const formattedId = matchedId.startsWith('#') ? matchedId : '#' + matchedId;\n    return '📦 *Order Tracking Request Received*\\n\\nThank you ' + name + '! We have received your inquiry for Order *' + formattedId + '*.\\n\\nOur logistics team is checking the live status with our courier right now and will update you directly in this chat shortly! 🚚';\n  } else {\n    return 'Hi ' + name + '! 📦\\n\\nTo check your order status, please reply with your *Order Number* (e.g. #1042) or your purchase email address.\\n\\nOnce you send it, our team will look up your shipment immediately!';\n  }\n})() }}"
+      },
+      "name": "📦 Track Order Handler",
+      "type": "n8n-nodes-wapio.wapio",
+      "typeVersion": 1,
+      "position": [
+        704,
+        1248
+      ],
+      "id": "36c43a76-7ab8-4942-94c9-ed6dcce9376e",
+      "credentials": {
+        "wapioApi": {
+          "id": "YOUR_WAPIO_CREDENTIAL_ID",
+          "name": "Wapio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionId": {
+          "__rl": true,
+          "value": "YOUR_WAPIO_SESSION_ID",
+          "mode": "list",
+          "cachedResultName": "Select your connected WhatsApp session"
+        },
+        "operation": "sendPoll",
+        "to": "={{ $('Wapio Trigger').first().json.data.messages.key.remoteJid }}",
+        "pollQuestion": "👕 Which replacement size would you like to exchange for?",
+        "pollOptions": [
+          "Small (S)",
+          "Medium (M)",
+          "Large (L)",
+          "X-Large (XL)"
+        ]
+      },
+      "name": "👕 Size Exchange (Interactive Poll)",
+      "type": "n8n-nodes-wapio.wapio",
+      "typeVersion": 1,
+      "position": [
+        704,
+        1408
+      ],
+      "id": "d6e7ced4-df02-4c02-942d-7623d68fe1c4",
+      "credentials": {
+        "wapioApi": {
+          "id": "YOUR_WAPIO_CREDENTIAL_ID",
+          "name": "Wapio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionId": {
+          "__rl": true,
+          "value": "YOUR_WAPIO_SESSION_ID",
+          "mode": "list",
+          "cachedResultName": "Select your connected WhatsApp session"
+        },
+        "to": "={{ $('Wapio Trigger').first().json.data.messages.key.remoteJid }}",
+        "text": "={{ $('⚡ Jev AI Decision Engine (<300ms)').first().json.is_photo_received ? '📸 Photo received! Thank you, ' + ($('Wapio Trigger').first().json.data.messages.pushName || 'there') + '. Our returns team has logged your unboxing proof. We will review it and confirm your replacement or refund within 1-2 business hours! 🛡️' : 'We are so sorry to hear that your order arrived with an issue! 🛡️\\n\\nOur priority support team has been notified. Please reply directly to this message with a clear photo of the item and package.\\n\\nWe will review it and process your replacement or refund right away.' }}"
+      },
+      "name": "🛡️ Customer Return Reassurance",
+      "type": "n8n-nodes-wapio.wapio",
+      "typeVersion": 1,
+      "position": [
+        704,
+        1568
+      ],
+      "id": "dd6894a3-1b38-4676-90c1-1d8bafa4345c",
+      "credentials": {
+        "wapioApi": {
+          "id": "YOUR_WAPIO_CREDENTIAL_ID",
+          "name": "Wapio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "admin-notify-check",
+              "leftValue": "={{ Boolean($('⚡ Jev AI Decision Engine (<300ms)').first().json.should_notify_manager) === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Should Notify Admin?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        976,
+        1424
+      ],
+      "id": "ce2c5d26-31a3-4f7e-a580-874436729c13"
+    },
+    {
+      "parameters": {
+        "sessionId": {
+          "__rl": true,
+          "value": "YOUR_WAPIO_SESSION_ID",
+          "mode": "list",
+          "cachedResultName": "Select your connected WhatsApp session"
+        },
+        "to": "={{ $('⚙️ Store & Admin Settings').first().json.managerPhone }}",
+        "text": "={{ (() => {\n  const trigger = $('Wapio Trigger').first().json;\n  const jev = $('⚡ Jev AI Decision Engine (<300ms)').first().json;\n  const name = trigger?.data?.messages?.pushName || 'Customer';\n  const phone = trigger?.data?.messages?.key?.cleanedSenderPn || trigger?.data?.messages?.key?.remoteJid?.split('@')?.[0] || 'Unknown';\n  const msgObj = trigger?.data?.messages?.message || {};\n  const msg = (msgObj.conversation || msgObj.extendedTextMessage?.text || msgObj.imageMessage?.caption || trigger?.data?.messages?.messageBody || '').trim();\n  const matchedId = msg.match(/#?\\d{3,8}\\b/)?.[0] || msg.match(/\\b\\d{3,8}\\b/)?.[0];\n\n  if (jev.category === 'size_exchange') {\n    return '👕 *SIZE EXCHANGE REQUEST*\\n\\n👤 *Customer:* ' + name + '\\n📱 *Phone:* +' + phone + '\\n💬 *Query:* \"' + msg + '\"\\n📊 *Action:* Dispatched interactive size poll to customer.';\n  }\n  if (jev.category === 'track_order') {\n    const orderStr = matchedId ? (matchedId.startsWith('#') ? matchedId : '#' + matchedId) : (msg || 'Provided in chat');\n    return '📦 *ORDER TRACKING REQUEST*\\n\\n👤 *Customer:* ' + name + '\\n📱 *Phone:* +' + phone + '\\n🔢 *Order ID:* ' + orderStr + '\\n💬 *Query:* \"' + msg + '\"\\n👉 *Action Required:* Look up order ' + orderStr + ' with courier and reply to customer.';\n  }\n  if (jev.category === 'damaged_or_return') {\n    if (jev.is_photo_received) {\n      return '📸 *RETURN PHOTO PROOF RECEIVED*\\n\\n👤 *Customer:* ' + name + '\\n📱 *Phone:* +' + phone + '\\n📸 *Status:* Customer uploaded a damaged item photo on WhatsApp!\\n👉 *Action Required:* Open WhatsApp to review photo and approve replacement/refund.';\n    } else {\n      return '🚨 *URGENT DAMAGED / RETURN REPORT*\\n\\n👤 *Customer:* ' + name + '\\n📱 *Phone:* +' + phone + '\\n⚠️ *Risk Score:* ' + jev.churn_risk_score + '/10\\n💬 *Message:* \"' + msg + '\"\\n👉 *Action Required:* Reassurance sent, waiting for customer photo.';\n    }\n  }\n  return '💬 *NEW STORE INQUIRY*\\n\\n👤 *Customer:* ' + name + '\\n📱 *Phone:* +' + phone + '\\n💬 *Message:* \"' + msg + '\"';\n})() }}"
+      },
+      "name": "🚨 Alert Store Manager (WhatsApp)",
+      "type": "n8n-nodes-wapio.wapio",
+      "typeVersion": 1,
+      "position": [
+        1232,
+        1424
+      ],
+      "id": "57514206-0ed4-43a1-a8e0-24232c110fab",
+      "credentials": {
+        "wapioApi": {
+          "id": "YOUR_WAPIO_CREDENTIAL_ID",
+          "name": "Wapio account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionId": {
+          "__rl": true,
+          "value": "YOUR_WAPIO_SESSION_ID",
+          "mode": "list",
+          "cachedResultName": "Select your connected WhatsApp session"
+        },
+        "to": "={{ $('Wapio Trigger').first().json.data.messages.key.remoteJid }}",
+        "text": "=Hello {{ $('Wapio Trigger').first().json.data?.messages?.pushName || 'there' }}! 👋\n\nThanks for reaching out to *{{ $('⚙️ Store & Admin Settings').first().json.storeName || $('⚙️ Store & Admin Settings').first().json.StoreName || 'TrendWear Boutique' }}*.\n\nHow can we help you today?\n• 📦 Track your shipment: Reply with your Order #\n• 👕 Size exchange: Reply 'Exchange size'\n• 🛡️ Damaged item: Send a photo of the package\n\nSupport Hours: Mon - Fri (9:00 AM - 6:00 PM EST)."
+      },
+      "name": "💬 General Store FAQ / Fallback",
+      "type": "n8n-nodes-wapio.wapio",
+      "typeVersion": 1,
+      "position": [
+        704,
+        1728
+      ],
+      "id": "e25cb729-fc72-44f0-b674-c07b8cd4968e",
+      "credentials": {
+        "wapioApi": {
+          "id": "YOUR_WAPIO_CREDENTIAL_ID",
+          "name": "Wapio account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Wapio Trigger": {
+      "main": [
+        [
+          {
+            "node": "Filter Bot Outgoing (fromMe == false)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Bot Outgoing (fromMe == false)": {
+      "main": [
+        [
+          {
+            "node": "⚙️ Store & Admin Settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚙️ Store & Admin Settings": {
+      "main": [
+        [
+          {
+            "node": "⚡ Jev AI Decision Engine (<300ms)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚡ Jev AI Decision Engine (<300ms)": {
+      "main": [
+        [
+          {
+            "node": "Router (Category Switch)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Router (Category Switch)": {
+      "main": [
+        [
+          {
+            "node": "📦 Track Order Handler",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "👕 Size Exchange (Interactive Poll)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "🛡️ Customer Return Reassurance",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "💬 General Store FAQ / Fallback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📦 Track Order Handler": {
+      "main": [
+        [
+          {
+            "node": "Should Notify Admin?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "👕 Size Exchange (Interactive Poll)": {
+      "main": [
+        [
+          {
+            "node": "🚨 Alert Store Manager (WhatsApp)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🛡️ Customer Return Reassurance": {
+      "main": [
+        [
+          {
+            "node": "Should Notify Admin?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Notify Admin?": {
+      "main": [
+        [
+          {
+            "node": "🚨 Alert Store Manager (WhatsApp)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "d4c17f984fd9adf175b59d0e04aa2fca0479a455ad0448ee477945890ad9a633"
+  }
+}
